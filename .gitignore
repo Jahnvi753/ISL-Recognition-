@@ -1,1 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
 
+# Jupyter
+.ipynb_checkpoints/
+
+# Datasets
+data/raw/
+data/videos/
+data/processed/
+
+# Large ML files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.pth
+*.pt
+*.onnx
+
+# Generated files
+*.npy
+*.npz
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
