@@ -14,318 +14,171 @@ from mediapipe.tasks.python import vision
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
-DATASET_DIR = ROOT_DIR / "ISL_Dataset"
-OUTPUT_DIR = ROOT_DIR / "processed"
+VIDEO_PATH = ROOT_DIR / "ISL_Dataset" / "Goodbye" / "Goodbye_1.mp4"
 MODEL_PATH = ROOT_DIR / "models" / "holistic_landmarker.task"
+OUTPUT_PATH = ROOT_DIR / "processed" / "Goodbye_001.npy"
 
-if not DATASET_DIR.exists():
-    raise FileNotFoundError(f"Dataset directory not found: {DATASET_DIR}")
+for required_path in (VIDEO_PATH, MODEL_PATH):
+    if not required_path.exists():
+        raise FileNotFoundError(f"Required file not found: {required_path}")
 
-if not MODEL_PATH.exists():
-    raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
-
-
-# ============================================================
-# CREATE OUTPUT DIRECTORY
-# ============================================================
-
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 # ============================================================
 # CREATE MEDIAPIPE HOLISTIC LANDMARKER
 # ============================================================
 
-def create_landmarker():
-    base_options = python.BaseOptions(
-        model_asset_path=str(MODEL_PATH)
-    )
+base_options = python.BaseOptions(
+    model_asset_path=str(MODEL_PATH)
+)
 
-    options = vision.HolisticLandmarkerOptions(
-        base_options=base_options,
-        running_mode=vision.RunningMode.VIDEO,
-    )
+options = vision.HolisticLandmarkerOptions(
+    base_options=base_options,
+    running_mode=vision.RunningMode.VIDEO,
+)
 
-    return vision.HolisticLandmarker.create_from_options(options)
+landmarker = vision.HolisticLandmarker.create_from_options(options)
 
 
 # ============================================================
-# PROCESS ONE VIDEO
+# OPEN VIDEO
 # ============================================================
 
-def process_video(video_path, output_path):
-    landmarker = create_landmarker()
+cap = cv2.VideoCapture(str(VIDEO_PATH))
 
-    print("\n----------------------------------------")
-    print(f"Processing: {video_path}")
+if not cap.isOpened():
+    raise RuntimeError(f"Could not open video: {VIDEO_PATH}")
 
-    cap = cv2.VideoCapture(str(video_path))
 
-    if not cap.isOpened():
-        print("ERROR: Could not open video.")
-        return False
+fps = cap.get(cv2.CAP_PROP_FPS)
 
-    fps = cap.get(cv2.CAP_PROP_FPS)
+print(f"Video FPS: {fps}")
 
-    if fps <= 0:
-        fps = 30.0
 
-    sequence = []
-    presence_sequence = []
+# ============================================================
+# EXTRACT LANDMARKS
+# ============================================================
 
-    frame_index = 0
+sequence = []
 
-    while True:
+frame_index = 0
 
-        success, frame = cap.read()
+while True:
 
-        if not success:
-            break
+    success, frame = cap.read()
 
-        # OpenCV BGR → RGB
-        frame_rgb = cv2.cvtColor(
-            frame,
-            cv2.COLOR_BGR2RGB
-        )
+    if not success:
+        break
 
-        mp_image = mp.Image(
-            image_format=mp.ImageFormat.SRGB,
-            data=frame_rgb
-        )
+    # OpenCV uses BGR.
+    # MediaPipe expects RGB.
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        timestamp_ms = int(
-            (frame_index / fps) * 1000
-        )
-
-        result = landmarker.detect_for_video(
-            mp_image,
-            timestamp_ms
-        )
-
-        # ----------------------------------------------------
-        # Create empty arrays
-        # ----------------------------------------------------
-
-        frame_landmarks = np.zeros(
-            (75, 3),
-            dtype=np.float32
-        )
-
-        frame_presence = np.zeros(
-            75,
-            dtype=np.float32
-        )
-
-        # ----------------------------------------------------
-        # POSE: 33 landmarks
-        # ----------------------------------------------------
-
-        if result.pose_landmarks:
-
-            for i, landmark in enumerate(result.pose_landmarks):
-
-                frame_landmarks[i] = [
-                    landmark.x,
-                    landmark.y,
-                    landmark.z
-                ]
-
-                frame_presence[i] = 1.0
-
-        # ----------------------------------------------------
-        # LEFT HAND: 21 landmarks
-        # ----------------------------------------------------
-
-        if result.left_hand_landmarks:
-
-            for i, landmark in enumerate(result.left_hand_landmarks):
-
-                index = 33 + i
-
-                frame_landmarks[index] = [
-                    landmark.x,
-                    landmark.y,
-                    landmark.z
-                ]
-
-                frame_presence[index] = 1.0
-
-        # ----------------------------------------------------
-        # RIGHT HAND: 21 landmarks
-        # ----------------------------------------------------
-
-        if result.right_hand_landmarks:
-
-            for i, landmark in enumerate(result.right_hand_landmarks):
-
-                index = 54 + i
-
-                frame_landmarks[index] = [
-                    landmark.x,
-                    landmark.y,
-                    landmark.z
-                ]
-
-                frame_presence[index] = 1.0
-
-        # ----------------------------------------------------
-        # Save frame
-        # ----------------------------------------------------
-
-        sequence.append(frame_landmarks)
-        presence_sequence.append(frame_presence)
-
-        frame_index += 1
-
-    cap.release()
-    landmarker.close()
-
-    # --------------------------------------------------------
-    # Convert to NumPy
-    # --------------------------------------------------------
-
-    sequence = np.asarray(
-        sequence,
-        dtype=np.float32
+    # Convert NumPy image to MediaPipe Image
+    mp_image = mp.Image(
+        image_format=mp.ImageFormat.SRGB,
+        data=frame_rgb
     )
 
-    presence_sequence = np.asarray(
-        presence_sequence,
-        dtype=np.float32
+    # Timestamp in milliseconds
+    timestamp_ms = int((frame_index / fps) * 1000)
+
+    # Run MediaPipe
+    result = landmarker.detect_for_video(
+        mp_image,
+        timestamp_ms
     )
 
     # --------------------------------------------------------
-    # Save
+    # Pose: 33 landmarks
     # --------------------------------------------------------
 
-    output_path.parent.mkdir(
-        parents=True,
-        exist_ok=True
+    pose = np.zeros((33, 3), dtype=np.float32)
+
+    if result.pose_landmarks:
+
+        for i, landmark in enumerate(result.pose_landmarks):
+
+            pose[i] = [
+                landmark.x,
+                landmark.y,
+                landmark.z
+            ]
+
+    # --------------------------------------------------------
+    # Left hand: 21 landmarks
+    # --------------------------------------------------------
+
+    left_hand = np.zeros((21, 3), dtype=np.float32)
+
+    if result.left_hand_landmarks:
+
+        for i, landmark in enumerate(result.left_hand_landmarks):
+
+            left_hand[i] = [
+                landmark.x,
+                landmark.y,
+                landmark.z
+            ]
+
+    # --------------------------------------------------------
+    # Right hand: 21 landmarks
+    # --------------------------------------------------------
+
+    right_hand = np.zeros((21, 3), dtype=np.float32)
+
+    if result.right_hand_landmarks:
+
+        for i, landmark in enumerate(result.right_hand_landmarks):
+
+            right_hand[i] = [
+                landmark.x,
+                landmark.y,
+                landmark.z
+            ]
+
+    # --------------------------------------------------------
+    # Combine
+    # --------------------------------------------------------
+
+    frame_landmarks = np.concatenate(
+        [
+            pose,
+            left_hand,
+            right_hand
+        ],
+        axis=0
     )
 
-    np.save(
-        output_path,
-        sequence
-    )
+    # Shape:
+    # (75, 3)
 
-    # Save detection/presence information separately
-    mask_path = output_path.with_name(
-        output_path.stem + "_mask.npy"
-    )
+    sequence.append(frame_landmarks)
 
-    np.save(
-        mask_path,
-        presence_sequence
-    )
-
-    print(f"Frames: {sequence.shape[0]}")
-    print(f"Landmarks: {sequence.shape[1]}")
-    print(f"Coordinates: {sequence.shape[2]}")
-    print(f"Shape: {sequence.shape}")
-
-    print(f"Saved: {output_path.name}")
-    print(f"Mask:  {mask_path.name}")
-
-    return True
-
-
-# ============================================================
-# FIND ALL VIDEOS
-# ============================================================
-
-video_extensions = {
-    ".mp4",
-    ".avi",
-    ".mov",
-    ".mkv"
-}
-
-video_files = []
-
-for path in DATASET_DIR.rglob("*"):
-
-    if path.is_file() and path.suffix.lower() in video_extensions:
-        video_files.append(path)
-
-
-video_files.sort()
-
-
-print("\n========================================")
-print("ISL LANDMARK EXTRACTION")
-print("========================================")
-
-print(f"Dataset: {DATASET_DIR}")
-print(f"Videos found: {len(video_files)}")
-
-
-# ============================================================
-# PROCESS ALL VIDEOS
-# ============================================================
-
-successful = 0
-failed = 0
-
-for video_path in video_files:
-
-    # Find the sign/class name.
-    #
-    # Example:
-    #
-    # C:\ISL-Dataset\Goodbye\goodbye_001.mp4
-    #
-    # parent.name = Goodbye
-
-    sign_name = video_path.parent.name
-
-    # Create matching output directory
-
-    output_class_dir = OUTPUT_DIR / sign_name
-
-    output_filename = video_path.stem + ".npy"
-
-    output_path = (
-        output_class_dir /
-        output_filename
-    )
-
-    try:
-
-        success = process_video(
-            video_path,
-            output_path
-        )
-
-        if success:
-            successful += 1
-        else:
-            failed += 1
-
-    except Exception as e:
-
-        print("\nERROR:")
-        print(video_path)
-        print(e)
-
-        failed += 1
+    frame_index += 1
 
 
 # ============================================================
 # CLEAN UP
 # ============================================================
 
+cap.release()
+landmarker.close()
+
 
 # ============================================================
-# FINAL SUMMARY
+# SAVE
 # ============================================================
 
-print("\n========================================")
-print("EXTRACTION COMPLETE")
-print("========================================")
+sequence = np.array(sequence, dtype=np.float32)
 
-print(f"Total videos: {len(video_files)}")
-print(f"Successful:   {successful}")
-print(f"Failed:       {failed}")
+print("\nExtraction complete!")
+print("Number of frames:", sequence.shape[0])
+print("Landmarks per frame:", sequence.shape[1])
+print("Coordinates:", sequence.shape[2])
+print("Final shape:", sequence.shape)
 
-print("\nOutput directory:")
-print(OUTPUT_DIR)
+np.save(OUTPUT_PATH, sequence)
+
+print(f"\nSaved to:\n{OUTPUT_PATH}")
