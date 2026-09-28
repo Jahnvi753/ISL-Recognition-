@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 
 from training.dataset import ISLDataset
 from models.stgcn.model import STGCN
@@ -15,8 +15,16 @@ def main():
         num_frames=100
     )
 
-    loader = DataLoader(
+    train_size = int(0.8 * len(dataset))
+    val_size = len(dataset) - train_size
+    train_dataset, _ = random_split(
         dataset,
+        [train_size, val_size],
+        generator=torch.Generator().manual_seed(42)
+    )
+
+    loader = DataLoader(
+        train_dataset,
         batch_size=8,
         shuffle=False
     )
@@ -59,7 +67,7 @@ def main():
                 if true.item() == pred.item():
                     class_correct[true.item()] += 1
 
-    print("\nOverall accuracy:")
+    print("\nTraining-set accuracy (biased; not a test metric):")
     print(f"{correct}/{total} = {correct / total:.4f}")
 
     print("\nPer-class accuracy:")
