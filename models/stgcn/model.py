@@ -69,23 +69,23 @@ class STGCN(nn.Module):
 
         self.block1 = STGCNBlock(
             in_channels=3,
-            out_channels=64,
+            out_channels=32,
             A=A
         )
 
         self.block2 = STGCNBlock(
+            in_channels=32,
+            out_channels=64,
+            A=A
+        )
+
+        self.block3 = STGCNBlock(
             in_channels=64,
             out_channels=128,
             A=A
         )
 
-        self.block3 = STGCNBlock(
-            in_channels=128,
-            out_channels=256,
-            A=A
-        )
-
-        self.classifier = nn.Linear(256, num_classes)
+        self.classifier = nn.Linear(128, num_classes)
 
     def forward(self, x):
         # Input: (N, T, 75, 3)

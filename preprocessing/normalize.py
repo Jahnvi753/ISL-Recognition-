@@ -1,5 +1,6 @@
 import numpy as np
 from pathlib import Path
+import shutil
 
 
 # ============================================================
@@ -7,8 +8,12 @@ from pathlib import Path
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-INPUT_DIR = BASE_DIR / "processed"
-OUTPUT_DIR = BASE_DIR / "normalized"
+
+# Input: correctly split landmark dataset
+INPUT_DIR = BASE_DIR / "dataset_split"
+
+# Output: normalized split dataset
+OUTPUT_DIR = BASE_DIR / "dataset_normalized"
 
 
 # MediaPipe Pose landmark indices
@@ -49,8 +54,8 @@ def normalize_sequence(sequence, mask):
             left_shoulder_present
             and right_shoulder_present
         ):
-            # We cannot reliably normalize this frame.
-            # Keep it as zeros for now.
+            # Cannot reliably normalize this frame.
+            # Keep it as zeros.
             continue
 
         # ----------------------------------------------------
@@ -103,7 +108,7 @@ landmark_files = sorted(
     INPUT_DIR.rglob("*.npy")
 )
 
-# Don't accidentally process mask files
+# Don't process mask files
 landmark_files = [
     path
     for path in landmark_files
@@ -154,9 +159,32 @@ for landmark_path in landmark_files:
 
             print("ERROR: Mask not found")
             failed += 1
+            total += 1
             continue
 
         mask = np.load(mask_path)
+
+        # ----------------------------------------------------
+        # Validate shapes
+        # ----------------------------------------------------
+
+        if sequence.ndim != 3:
+            raise ValueError(
+                f"Expected sequence with 3 dimensions, "
+                f"got {sequence.shape}"
+            )
+
+        if sequence.shape[1:] != (75, 3):
+            raise ValueError(
+                f"Expected sequence shape (T,75,3), "
+                f"got {sequence.shape}"
+            )
+
+        if mask.shape[0] != sequence.shape[0]:
+            raise ValueError(
+                f"Sequence/mask frame mismatch: "
+                f"{sequence.shape} vs {mask.shape}"
+            )
 
         # ----------------------------------------------------
         # Normalize
@@ -186,13 +214,30 @@ for landmark_path in landmark_files:
             exist_ok=True
         )
 
-        # ----------------------------------------------------
-        # Save
+                # ----------------------------------------------------
+        # Save normalized landmarks
         # ----------------------------------------------------
 
         np.save(
             output_path,
             normalized
+        )
+
+        # ----------------------------------------------------
+        # Save corresponding mask
+        # ----------------------------------------------------
+
+        output_mask_path = output_path.with_name(
+            output_path.stem + "_mask.npy"
+        )
+
+        np.save(
+            output_mask_path,
+            mask
+        )
+
+        print(
+            f"Saved mask: {output_mask_path}"
         )
 
         print(
@@ -236,4 +281,3 @@ print(f"Failed:     {failed}")
 
 print("\nOutput:")
 print(OUTPUT_DIR)
-

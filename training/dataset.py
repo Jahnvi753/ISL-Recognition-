@@ -7,7 +7,9 @@ from torch.utils.data import Dataset
 
 
 class ISLDataset(Dataset):
+
     def __init__(self, root="data/processed", num_frames=100):
+
         self.root = root
         self.num_frames = num_frames
 
@@ -19,60 +21,163 @@ class ISLDataset(Dataset):
         )
 
         self.class_to_idx = {
-            name: i for i, name in enumerate(self.classes)
+            name: i
+            for i, name in enumerate(self.classes)
         }
 
         self.samples = []
 
         for class_name in self.classes:
-            class_dir = os.path.join(root, class_name)
 
-            for path in sorted(glob.glob(os.path.join(class_dir, "*.npy"))):
-                # Ignore mask files
+            class_dir = os.path.join(
+                root,
+                class_name
+            )
+
+            for path in sorted(
+                glob.glob(
+                    os.path.join(class_dir, "*.npy")
+                )
+            ):
+
                 if path.endswith("_mask.npy"):
                     continue
 
+                mask_path = path.replace(
+                    ".npy",
+                    "_mask.npy"
+                )
+
+                if not os.path.exists(mask_path):
+                    print(
+                        f"Warning: missing mask for {path}"
+                    )
+                    continue
+
                 self.samples.append(
-                    (path, self.class_to_idx[class_name])
+                    (
+                        path,
+                        mask_path,
+                        self.class_to_idx[class_name]
+                    )
                 )
 
     def __len__(self):
         return len(self.samples)
 
+    def _resample_sequence(self, data, mask):
+
+        T = data.shape[0]
+
+        if T == self.num_frames:
+            return data, mask
+
+        # New temporal positions
+        old_positions = np.arange(T)
+
+        new_positions = np.linspace(
+            0,
+            T - 1,
+            self.num_frames
+        )
+
+        # --------------------------------------------------
+        # Landmark interpolation
+        # --------------------------------------------------
+
+        resized_data = np.zeros(
+            (self.num_frames, 75, 3),
+            dtype=np.float32
+        )
+
+        for landmark in range(75):
+
+            for coordinate in range(3):
+
+                resized_data[:, landmark, coordinate] = np.interp(
+                    new_positions,
+                    old_positions,
+                    data[:, landmark, coordinate]
+                )
+
+        # --------------------------------------------------
+        # Mask interpolation
+        #
+        # Use nearest-neighbour behavior so that the mask
+        # remains effectively 0/1.
+        # --------------------------------------------------
+
+        mask_indices = np.rint(
+            new_positions
+        ).astype(np.int32)
+
+        mask_indices = np.clip(
+            mask_indices,
+            0,
+            T - 1
+        )
+
+        resized_mask = mask[mask_indices]
+
+        return resized_data, resized_mask
+
     def __getitem__(self, index):
-        path, label = self.samples[index]
+
+        path, mask_path, label = self.samples[index]
 
         data = np.load(path).astype(np.float32)
 
-        # Expected shape: (T, 75, 3)
+        mask = np.load(mask_path).astype(np.float32)
+
+        # --------------------------------------------------
+        # Validate landmark shape
+        # --------------------------------------------------
+
         if data.ndim != 3 or data.shape[1:] != (75, 3):
+
             raise ValueError(
-                f"Unexpected shape {data.shape} in {path}"
+                f"Unexpected landmark shape "
+                f"{data.shape} in {path}"
             )
 
-        # Normalize sequence length to num_frames
-        T = data.shape[0]
+        # --------------------------------------------------
+        # Validate mask shape
+        # --------------------------------------------------
 
-        if T >= self.num_frames:
-            indices = np.linspace(
-                0,
-                T - 1,
-                self.num_frames
-            ).astype(int)
+        if mask.ndim != 2 or mask.shape[1] != 75:
 
-            data = data[indices]
-
-        else:
-            padded = np.zeros(
-                (self.num_frames, 75, 3),
-                dtype=np.float32
+            raise ValueError(
+                f"Unexpected mask shape "
+                f"{mask.shape} in {mask_path}"
             )
 
-            padded[:T] = data
+        if data.shape[0] != mask.shape[0]:
 
-            data = padded
+            raise ValueError(
+                f"Landmark/mask frame mismatch: "
+                f"{data.shape[0]} vs {mask.shape[0]} "
+                f"in {path}"
+            )
+
+        # --------------------------------------------------
+        # Resample every sequence to exactly num_frames
+        # --------------------------------------------------
+
+        data, mask = self._resample_sequence(
+            data,
+            mask
+        )
+
+        # --------------------------------------------------
+        # Remove undetected landmarks
+        # --------------------------------------------------
+
+        data = data * mask[..., None]
 
         return (
             torch.from_numpy(data),
-            torch.tensor(label, dtype=torch.long)
+            torch.tensor(
+                label,
+                dtype=torch.long
+            )
         )

@@ -14,9 +14,9 @@ from mediapipe.tasks.python import vision
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
-VIDEO_PATH = ROOT_DIR / "ISL_Dataset" / "Goodbye" / "Goodbye_1.mp4"
+VIDEO_PATH = ROOT_DIR / "dataset" / "train" / "Goodbye" / "Goodbye_1.mp4"
 MODEL_PATH = ROOT_DIR / "models" / "holistic_landmarker.task"
-OUTPUT_PATH = ROOT_DIR / "processed" / "Goodbye_001.npy"
+OUTPUT_PATH = ROOT_DIR / "processed" / "Goodbye_1.npy"
 
 for required_path in (VIDEO_PATH, MODEL_PATH):
     if not required_path.exists():
