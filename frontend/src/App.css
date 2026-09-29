@@ -1,0 +1,138 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f4f6f8;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+.header {
+  background: white;
+  text-align: center;
+  padding: 30px 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.header h1 {
+  margin: 0 0 10px;
+  font-size: 32px;
+}
+
+.header p {
+  margin: 0;
+  color: #666;
+  font-size: 16px;
+}
+
+.main-container {
+  max-width: 1200px;
+  margin: 40px auto;
+  padding: 0 20px;
+
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+}
+
+.card {
+  background: white;
+  border-radius: 16px;
+  padding: 25px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+.card h2 {
+  margin-top: 0;
+}
+
+.video-container {
+  position: relative;
+  width: 100%;
+  background: black;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+video {
+  display: block;
+  width: 100%;
+  min-height: 350px;
+  object-fit: cover;
+}
+
+.camera-message {
+  position: absolute;
+  inset: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: white;
+  background: #222;
+}
+
+button {
+  border: none;
+  border-radius: 10px;
+  padding: 14px 22px;
+  margin-top: 20px;
+
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.primary-button {
+  background: #333;
+  color: white;
+}
+
+.speak-button {
+  background: #333;
+  color: white;
+}
+
+.prediction {
+  margin: 50px 0 30px;
+
+  font-size: 42px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.confidence {
+  text-align: center;
+  font-size: 18px;
+}
+
+.speak-button {
+  display: block;
+  margin: 30px auto 0;
+}
+
+@media (max-width: 800px) {
+  .main-container {
+    grid-template-columns: 1fr;
+  }
+
+  .prediction {
+    font-size: 32px;
+  }
+}
+.button-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.stop-button {
+  background: #555;
+  color: white;
+}
